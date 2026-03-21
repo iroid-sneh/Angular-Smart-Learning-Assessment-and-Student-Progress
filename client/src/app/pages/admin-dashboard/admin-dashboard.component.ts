@@ -119,7 +119,7 @@ import { AdminService, DashboardStats } from '../../services/admin.service';
             <tr *ngFor="let s of stats.recentSubmissions">
               <td>{{ s.studentId?.name || '-' }}</td>
               <td>{{ s.assignmentId?.title || '-' }}</td>
-              <td><a [href]="s.fileUrl" target="_blank" class="link">View</a></td>
+              <td><a [href]="'http://localhost:5000/uploads/' + s.fileUrl" target="_blank" class="link">View</a></td>
               <td>{{ s.submittedAt | date:'short' }}</td>
               <td>
                 <span class="status graded" *ngIf="s.marks !== null">{{ s.marks }}/100</span>
