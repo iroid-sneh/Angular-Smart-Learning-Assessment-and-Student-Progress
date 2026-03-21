@@ -144,7 +144,7 @@ import { AdminService, DashboardStats } from '../../services/admin.service';
               <td>{{ i + 1 }}</td>
               <td>{{ u.name }}</td>
               <td>{{ u.email }}</td>
-              <td><span class="role-badge" [class]="u.role">{{ u.role }}</span></td>
+              <td><span [ngClass]="['role-badge', u.role]">{{ u.role }}</span></td>
               <td>{{ u.createdAt | date:'medium' }}</td>
             </tr>
           </tbody>
