@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init:*)",
+      "Bash(npx -y @angular/cli@17 new smart-learning --directory . --routing --style=css --skip-git --skip-tests --ssr=false)",
+      "Bash(npm install:*)",
+      "Bash(npx -y --cache /tmp/npm-cache-clean @angular/cli@17 new smart-learning --directory \"d:/Projects/College Projects/AngularProjects/SnehGroupAngular/client\" --routing --style=css --skip-git --skip-tests --ssr=false)",
+      "Bash(node -e \":*)",
+      "Bash(npx ng:*)",
+      "Bash(node -c server.js)",
+      "Bash(grep -E '\\\\.json|\\\\.env|\\\\.js$')",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(node -c \"$f\")",
+      "Bash(done)",
+      "Bash(do node:*)",
+      "Bash(echo \"FAILED: $f\")"
+    ]
+  }
+}
