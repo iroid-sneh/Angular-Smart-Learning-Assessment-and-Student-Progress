@@ -5,8 +5,12 @@ const {
   getAllUsers,
   deleteUser,
   updateUserRole,
+  updateUser,
   adminCreateCourse,
   adminDeleteCourse,
+  adminUpdateCourse,
+  adminUpdateAssignment,
+  adminDeleteAssignment,
   getDashboardStats,
 } = require('../controllers/adminController');
 
@@ -20,9 +24,15 @@ router.get('/stats', getDashboardStats);
 router.get('/users', getAllUsers);
 router.delete('/users/:id', deleteUser);
 router.put('/users/:id/role', updateUserRole);
+router.put('/users/:id', updateUser);
 
 // Course management
 router.post('/courses', adminCreateCourse);
 router.delete('/courses/:id', adminDeleteCourse);
+router.put('/courses/:id', adminUpdateCourse);
+
+// Assignment management
+router.put('/assignments/:id', adminUpdateAssignment);
+router.delete('/assignments/:id', adminDeleteAssignment);
 
 module.exports = router;

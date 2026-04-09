@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { AdminService } from '../../services/admin.service';
+import { ExportService } from '../../services/export.service';
 import { CourseService, Course } from '../../services/course.service';
 import { User } from '../../services/auth.service';
 
@@ -42,7 +43,13 @@ import { User } from '../../services/auth.service';
       </div>
 
       <!-- Course List -->
-      <h2>All Courses</h2>
+      <div class="section-header">
+        <h2>All Courses</h2>
+        <div class="export-btns" *ngIf="courses.length > 0">
+          <button class="btn btn-export" (click)="exportCSV()">Export CSV</button>
+          <button class="btn btn-export" (click)="exportExcel()">Export Excel</button>
+        </div>
+      </div>
       <table class="data-table" *ngIf="courses.length > 0">
         <thead>
           <tr>
@@ -57,12 +64,30 @@ import { User } from '../../services/auth.service';
         <tbody>
           <tr *ngFor="let course of courses; let i = index">
             <td>{{ i + 1 }}</td>
-            <td><a [routerLink]="['/courses', course._id]">{{ course.title }}</a></td>
-            <td>{{ course.description | slice:0:50 }}{{ course.description.length > 50 ? '...' : '' }}</td>
-            <td>{{ course.facultyId?.name }}</td>
-            <td>{{ course.createdAt | date:'mediumDate' }}</td>
             <td>
-              <button class="btn btn-danger" (click)="deleteCourse(course._id)">Delete</button>
+              <span *ngIf="editingCourseId !== course._id"><a [routerLink]="['/courses', course._id]">{{ course.title }}</a></span>
+              <input *ngIf="editingCourseId === course._id" type="text" [(ngModel)]="editCourse.title" [name]="'title_'+course._id" class="edit-input">
+            </td>
+            <td>
+              <span *ngIf="editingCourseId !== course._id">{{ course.description | slice:0:50 }}{{ course.description.length > 50 ? '...' : '' }}</span>
+              <textarea *ngIf="editingCourseId === course._id" [(ngModel)]="editCourse.description" [name]="'desc_'+course._id" class="edit-textarea" rows="2"></textarea>
+            </td>
+            <td>
+              <span *ngIf="editingCourseId !== course._id">{{ course.facultyId?.name }}</span>
+              <select *ngIf="editingCourseId === course._id" [(ngModel)]="editCourse.facultyId" [name]="'faculty_'+course._id" class="edit-select">
+                <option *ngFor="let f of facultyList" [value]="f._id">{{ f.name }}</option>
+              </select>
+            </td>
+            <td>{{ course.createdAt | date:'mediumDate' }}</td>
+            <td class="action-btns">
+              <ng-container *ngIf="editingCourseId !== course._id">
+                <button class="btn btn-edit" (click)="startEdit(course)">Edit</button>
+                <button class="btn btn-danger" (click)="deleteCourse(course._id)">Delete</button>
+              </ng-container>
+              <ng-container *ngIf="editingCourseId === course._id">
+                <button class="btn btn-save" (click)="saveEdit(course._id)">Save</button>
+                <button class="btn btn-cancel" (click)="cancelEdit()">Cancel</button>
+              </ng-container>
             </td>
           </tr>
         </tbody>
@@ -73,6 +98,13 @@ import { User } from '../../services/auth.service';
   styles: [`
     .admin-courses h1 { margin: 0 0 20px; color: #1a1a2e; }
     h2 { color: #333; margin: 20px 0 12px; font-size: 1.1rem; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; }
+    .export-btns { display: flex; gap: 8px; }
+    .btn-export {
+      padding: 6px 14px; background: #00897b; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer; font-size: 0.85rem;
+    }
+    .btn-export:hover { background: #00695c; }
     .form-section {
       background: #f8f9fa;
       padding: 20px;
@@ -98,11 +130,31 @@ import { User } from '../../services/auth.service';
     }
     .data-table th { background: #f8f9fa; color: #333; font-weight: 600; }
     .data-table td a { color: #1a1a2e; font-weight: 500; }
+    .action-btns { display: flex; gap: 6px; align-items: center; }
+    .btn { padding: 4px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+    .btn-edit { background: #1565c0; color: #fff; }
+    .btn-edit:hover { background: #0d47a1; }
+    .btn-save { background: #2e7d32; color: #fff; }
+    .btn-save:hover { background: #1b5e20; }
+    .btn-cancel { background: #757575; color: #fff; }
+    .btn-cancel:hover { background: #616161; }
     .btn-danger {
       padding: 4px 12px; background: #e94560; color: #fff; border: none;
       border-radius: 4px; cursor: pointer; font-size: 0.85rem;
     }
     .btn-danger:hover { background: #c62828; }
+    .edit-input {
+      padding: 4px 8px; border: 1px solid #1565c0; border-radius: 4px;
+      font-size: 0.85rem; width: 100%; box-sizing: border-box;
+    }
+    .edit-textarea {
+      padding: 4px 8px; border: 1px solid #1565c0; border-radius: 4px;
+      font-size: 0.85rem; width: 100%; box-sizing: border-box; font-family: inherit;
+    }
+    .edit-select {
+      padding: 4px 8px; border: 1px solid #1565c0; border-radius: 4px;
+      font-size: 0.85rem;
+    }
     .empty-msg { color: #999; font-style: italic; }
     .success-msg {
       background: #e0f7e0; color: #2e7d32; padding: 10px;
@@ -118,12 +170,15 @@ export class AdminCoursesComponent implements OnInit {
   courses: Course[] = [];
   facultyList: User[] = [];
   newCourse = { title: '', description: '', facultyId: '' };
+  editingCourseId: string | null = null;
+  editCourse = { title: '', description: '', facultyId: '' };
   success = '';
   error = '';
 
   constructor(
     private adminService: AdminService,
-    private courseService: CourseService
+    private courseService: CourseService,
+    private exportService: ExportService
   ) {}
 
   ngOnInit(): void {
@@ -159,6 +214,54 @@ export class AdminCoursesComponent implements OnInit {
       },
       error: (err) => this.error = err.error?.message || 'Failed to create course'
     });
+  }
+
+  startEdit(course: Course): void {
+    this.editingCourseId = course._id;
+    this.editCourse = {
+      title: course.title,
+      description: course.description,
+      facultyId: course.facultyId?._id || ''
+    };
+  }
+
+  cancelEdit(): void {
+    this.editingCourseId = null;
+    this.editCourse = { title: '', description: '', facultyId: '' };
+  }
+
+  saveEdit(courseId: string): void {
+    if (!this.editCourse.title || !this.editCourse.description) {
+      this.error = 'Title and description are required';
+      return;
+    }
+    this.success = '';
+    this.error = '';
+    this.adminService.updateCourse(courseId, this.editCourse).subscribe({
+      next: () => {
+        this.success = 'Course updated successfully';
+        this.editingCourseId = null;
+        this.loadCourses();
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: (err) => this.error = err.error?.message || 'Failed to update course'
+    });
+  }
+
+  exportCSV(): void {
+    const data = this.courses.map(c => ({
+      title: c.title, description: c.description, faculty: c.facultyId?.name || '',
+      created: new Date(c.createdAt).toLocaleDateString()
+    }));
+    this.exportService.exportToCSV(data, 'courses', { title: 'Title', description: 'Description', faculty: 'Faculty', created: 'Created' });
+  }
+
+  exportExcel(): void {
+    const data = this.courses.map(c => ({
+      title: c.title, description: c.description, faculty: c.facultyId?.name || '',
+      created: new Date(c.createdAt).toLocaleDateString()
+    }));
+    this.exportService.exportToExcel(data, 'courses', { title: 'Title', description: 'Description', faculty: 'Faculty', created: 'Created' });
   }
 
   deleteCourse(courseId: string): void {

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { SubmissionService, Submission } from '../../services/submission.service';
 import { AssignmentService, Assignment } from '../../services/assignment.service';
+import { ExportService } from '../../services/export.service';
 
 @Component({
   selector: 'app-view-submissions',
@@ -11,7 +12,13 @@ import { AssignmentService, Assignment } from '../../services/assignment.service
   imports: [CommonModule, FormsModule],
   template: `
     <div class="submissions-page">
-      <h1>Submissions</h1>
+      <div class="page-header">
+        <h1>Submissions</h1>
+        <div class="export-btns" *ngIf="submissions.length > 0">
+          <button class="btn-export" (click)="exportCSV()">Export CSV</button>
+          <button class="btn-export" (click)="exportExcel()">Export Excel</button>
+        </div>
+      </div>
       <div class="assignment-info" *ngIf="assignment">
         <h3>{{ assignment.title }}</h3>
         <p>{{ assignment.description }}</p>
@@ -79,7 +86,15 @@ import { AssignmentService, Assignment } from '../../services/assignment.service
     </div>
   `,
   styles: [`
-    .submissions-page h1 { margin: 0 0 16px; color: #1a1a2e; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .page-header h1 { margin: 0; }
+    .export-btns { display: flex; gap: 8px; }
+    .btn-export {
+      padding: 5px 12px; background: #00897b; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer; font-size: 0.82rem;
+    }
+    .btn-export:hover { background: #00695c; }
+    .submissions-page h1 { color: #1a1a2e; }
     .assignment-info {
       background: #f8f9fa; padding: 16px; border-radius: 8px;
       margin-bottom: 20px; border-left: 4px solid #1a1a2e;
@@ -135,6 +150,7 @@ export class ViewSubmissionsComponent implements OnInit {
   constructor(
     private submissionService: SubmissionService,
     private assignmentService: AssignmentService,
+    private exportService: ExportService,
     private route: ActivatedRoute
   ) {}
 
@@ -211,5 +227,29 @@ export class ViewSubmissionsComponent implements OnInit {
 
   getStudentEmail(s: Submission): string {
     return typeof s.studentId === 'object' ? s.studentId.email : '';
+  }
+
+  exportCSV(): void {
+    const data = this.submissions.map(s => ({
+      student: this.getStudentName(s), email: this.getStudentEmail(s),
+      file: s.originalName || s.fileUrl,
+      submitted: new Date(s.submittedAt).toLocaleString(),
+      marks: s.marks !== null ? s.marks : 'Pending',
+      feedback: s.feedback || '-'
+    }));
+    const headers = { student: 'Student', email: 'Email', file: 'File', submitted: 'Submitted', marks: 'Marks', feedback: 'Feedback' };
+    this.exportService.exportToCSV(data, 'submissions', headers);
+  }
+
+  exportExcel(): void {
+    const data = this.submissions.map(s => ({
+      student: this.getStudentName(s), email: this.getStudentEmail(s),
+      file: s.originalName || s.fileUrl,
+      submitted: new Date(s.submittedAt).toLocaleString(),
+      marks: s.marks !== null ? s.marks : 'Pending',
+      feedback: s.feedback || '-'
+    }));
+    const headers = { student: 'Student', email: 'Email', file: 'File', submitted: 'Submitted', marks: 'Marks', feedback: 'Feedback' };
+    this.exportService.exportToExcel(data, 'submissions', headers);
   }
 }

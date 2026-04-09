@@ -4,6 +4,7 @@ import { RouterModule, Router } from '@angular/router';
 import { AuthService, User } from '../../services/auth.service';
 import { CourseService, Course } from '../../services/course.service';
 import { EnrollmentService, Enrollment } from '../../services/enrollment.service';
+import { ExportService } from '../../services/export.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -84,7 +85,13 @@ import { EnrollmentService, Enrollment } from '../../services/enrollment.service
 
           <!-- Enrolled Students -->
           <div class="sub-section" *ngIf="course.enrolledStudents?.length > 0">
-            <h3>Enrolled Students</h3>
+            <div class="sub-header">
+              <h3>Enrolled Students</h3>
+              <div class="export-btns">
+                <button class="btn-export" (click)="exportStudentsCSV(course)">CSV</button>
+                <button class="btn-export" (click)="exportStudentsExcel(course)">Excel</button>
+              </div>
+            </div>
             <table class="data-table">
               <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Enrolled On</th></tr></thead>
               <tbody>
@@ -110,7 +117,13 @@ import { EnrollmentService, Enrollment } from '../../services/enrollment.service
 
           <!-- Recent Submissions -->
           <div class="sub-section" *ngIf="course.recentSubmissions?.length > 0">
-            <h3>Recent Submissions</h3>
+            <div class="sub-header">
+              <h3>Recent Submissions</h3>
+              <div class="export-btns">
+                <button class="btn-export" (click)="exportCourseSubmissionsCSV(course)">CSV</button>
+                <button class="btn-export" (click)="exportCourseSubmissionsExcel(course)">Excel</button>
+              </div>
+            </div>
             <table class="data-table">
               <thead><tr><th>Student</th><th>Assignment</th><th>Submitted</th><th>Status</th><th>Action</th></tr></thead>
               <tbody>
@@ -219,6 +232,13 @@ import { EnrollmentService, Enrollment } from '../../services/enrollment.service
     }
     .empty-msg { color: #999; font-style: italic; }
     .empty-msg a { color: #1a1a2e; font-weight: 500; }
+    .sub-header { display: flex; justify-content: space-between; align-items: center; }
+    .export-btns { display: flex; gap: 6px; }
+    .btn-export {
+      padding: 3px 10px; background: #00897b; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer; font-size: 0.75rem;
+    }
+    .btn-export:hover { background: #00695c; }
   `]
 })
 export class DashboardComponent implements OnInit {
@@ -232,6 +252,7 @@ export class DashboardComponent implements OnInit {
     private authService: AuthService,
     private courseService: CourseService,
     private enrollmentService: EnrollmentService,
+    private exportService: ExportService,
     private router: Router
   ) {}
 
@@ -275,5 +296,37 @@ export class DashboardComponent implements OnInit {
 
   getCourseProp(e: Enrollment, prop: string): string {
     return typeof e.courseId === 'object' ? (e.courseId as any)[prop] : '';
+  }
+
+  exportStudentsCSV(course: any): void {
+    const data = (course.enrolledStudents || []).map((s: any) => ({
+      name: s.name, email: s.email, enrolledOn: new Date(s.enrolledAt).toLocaleDateString()
+    }));
+    this.exportService.exportToCSV(data, `${course.title}_students`, { name: 'Name', email: 'Email', enrolledOn: 'Enrolled On' });
+  }
+
+  exportStudentsExcel(course: any): void {
+    const data = (course.enrolledStudents || []).map((s: any) => ({
+      name: s.name, email: s.email, enrolledOn: new Date(s.enrolledAt).toLocaleDateString()
+    }));
+    this.exportService.exportToExcel(data, `${course.title}_students`, { name: 'Name', email: 'Email', enrolledOn: 'Enrolled On' });
+  }
+
+  exportCourseSubmissionsCSV(course: any): void {
+    const data = (course.recentSubmissions || []).map((s: any) => ({
+      student: s.studentId?.name || '-', assignment: s.assignmentId?.title || '-',
+      submitted: new Date(s.submittedAt).toLocaleString(),
+      marks: s.marks !== null ? s.marks + '/100' : 'Pending'
+    }));
+    this.exportService.exportToCSV(data, `${course.title}_submissions`, { student: 'Student', assignment: 'Assignment', submitted: 'Submitted', marks: 'Marks' });
+  }
+
+  exportCourseSubmissionsExcel(course: any): void {
+    const data = (course.recentSubmissions || []).map((s: any) => ({
+      student: s.studentId?.name || '-', assignment: s.assignmentId?.title || '-',
+      submitted: new Date(s.submittedAt).toLocaleString(),
+      marks: s.marks !== null ? s.marks + '/100' : 'Pending'
+    }));
+    this.exportService.exportToExcel(data, `${course.title}_submissions`, { student: 'Student', assignment: 'Assignment', submitted: 'Submitted', marks: 'Marks' });
   }
 }

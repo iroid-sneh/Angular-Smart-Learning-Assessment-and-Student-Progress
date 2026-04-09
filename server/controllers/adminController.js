@@ -165,11 +165,95 @@ const getDashboardStats = async (req, res) => {
   }
 };
 
+// Admin updates a user (name, email)
+const updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email } = req.body;
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    const user = await User.findByIdAndUpdate(id, updateData, { new: true }).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'Email already exists' });
+    }
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Admin updates a course
+const adminUpdateCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, facultyId } = req.body;
+    const updateData = {};
+    if (title) updateData.title = title;
+    if (description) updateData.description = description;
+    if (facultyId) {
+      const faculty = await User.findById(facultyId);
+      if (!faculty || faculty.role !== 'faculty') {
+        return res.status(400).json({ message: 'Invalid faculty ID' });
+      }
+      updateData.facultyId = facultyId;
+    }
+    const course = await Course.findByIdAndUpdate(id, updateData, { new: true }).populate('facultyId', 'name email');
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+    res.json(course);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Admin updates an assignment
+const adminUpdateAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, dueDate } = req.body;
+    const updateData = {};
+    if (title) updateData.title = title;
+    if (description) updateData.description = description;
+    if (dueDate) updateData.dueDate = dueDate;
+    const assignment = await Assignment.findByIdAndUpdate(id, updateData, { new: true });
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+    res.json(assignment);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Admin deletes an assignment
+const adminDeleteAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const assignment = await Assignment.findByIdAndDelete(id);
+    if (!assignment) {
+      return res.status(404).json({ message: 'Assignment not found' });
+    }
+    await Submission.deleteMany({ assignmentId: id });
+    res.json({ message: 'Assignment and related submissions deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   getAllUsers,
   deleteUser,
   updateUserRole,
+  updateUser,
   adminCreateCourse,
   adminDeleteCourse,
+  adminUpdateCourse,
+  adminUpdateAssignment,
+  adminDeleteAssignment,
   getDashboardStats,
 };

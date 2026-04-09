@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SubmissionService, Submission } from '../../services/submission.service';
+import { ExportService } from '../../services/export.service';
 
 @Component({
   selector: 'app-my-submissions',
@@ -8,7 +9,13 @@ import { SubmissionService, Submission } from '../../services/submission.service
   imports: [CommonModule],
   template: `
     <div class="my-submissions">
-      <h1>My Submissions</h1>
+      <div class="page-header">
+        <h1>My Submissions</h1>
+        <div class="export-btns" *ngIf="submissions.length > 0">
+          <button class="btn-export" (click)="exportCSV()">Export CSV</button>
+          <button class="btn-export" (click)="exportExcel()">Export Excel</button>
+        </div>
+      </div>
 
       <table class="data-table" *ngIf="submissions.length > 0">
         <thead>
@@ -42,7 +49,15 @@ import { SubmissionService, Submission } from '../../services/submission.service
     </div>
   `,
   styles: [`
-    .my-submissions h1 { margin: 0 0 20px; color: #1a1a2e; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .page-header h1 { margin: 0; }
+    .export-btns { display: flex; gap: 8px; }
+    .btn-export {
+      padding: 5px 12px; background: #00897b; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer; font-size: 0.82rem;
+    }
+    .btn-export:hover { background: #00695c; }
+    .my-submissions h1 { color: #1a1a2e; }
     .data-table { width: 100%; border-collapse: collapse; background: #fff; }
     .data-table th, .data-table td {
       padding: 12px 16px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 0.9rem;
@@ -69,7 +84,7 @@ import { SubmissionService, Submission } from '../../services/submission.service
 export class MySubmissionsComponent implements OnInit {
   submissions: Submission[] = [];
 
-  constructor(private submissionService: SubmissionService) {}
+  constructor(private submissionService: SubmissionService, private exportService: ExportService) {}
 
   ngOnInit(): void {
     this.submissionService.getMySubmissions().subscribe({
@@ -92,5 +107,23 @@ export class MySubmissionsComponent implements OnInit {
         window.URL.revokeObjectURL(url);
       }
     });
+  }
+
+  exportCSV(): void {
+    const data = this.submissions.map(s => ({
+      assignment: this.getAssignmentTitle(s), file: s.originalName || s.fileUrl,
+      submitted: new Date(s.submittedAt).toLocaleString(),
+      marks: s.marks !== null ? s.marks + '/100' : 'Pending', feedback: s.feedback || '-'
+    }));
+    this.exportService.exportToCSV(data, 'my_submissions', { assignment: 'Assignment', file: 'File', submitted: 'Submitted', marks: 'Marks', feedback: 'Feedback' });
+  }
+
+  exportExcel(): void {
+    const data = this.submissions.map(s => ({
+      assignment: this.getAssignmentTitle(s), file: s.originalName || s.fileUrl,
+      submitted: new Date(s.submittedAt).toLocaleString(),
+      marks: s.marks !== null ? s.marks + '/100' : 'Pending', feedback: s.feedback || '-'
+    }));
+    this.exportService.exportToExcel(data, 'my_submissions', { assignment: 'Assignment', file: 'File', submitted: 'Submitted', marks: 'Marks', feedback: 'Feedback' });
   }
 }

@@ -1,15 +1,17 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterModule, ActivatedRoute } from '@angular/router';
 import { CourseService, Course } from '../../services/course.service';
 import { AssignmentService, Assignment } from '../../services/assignment.service';
 import { AuthService } from '../../services/auth.service';
 import { EnrollmentService } from '../../services/enrollment.service';
+import { AdminService } from '../../services/admin.service';
 
 @Component({
   selector: 'app-course-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   template: `
     <div class="course-detail" *ngIf="course">
       <div class="course-header">
@@ -36,16 +38,43 @@ import { EnrollmentService } from '../../services/enrollment.service';
 
         <div class="assignment-list">
           <div class="assignment-card" *ngFor="let a of assignments">
-            <div class="assignment-info">
-              <h3>{{ a.title }}</h3>
-              <p>{{ a.description }}</p>
-              <span class="due-date">Due: {{ a.dueDate | date:'mediumDate' }}</span>
-            </div>
-            <div class="assignment-actions">
-              <a *ngIf="role === 'student' && isEnrolled" [routerLink]="['/submit-assignment']" [queryParams]="{assignmentId: a._id}" class="btn btn-sm">Submit</a>
-              <span *ngIf="role === 'student' && !isEnrolled" class="text-muted">Enroll to submit</span>
-              <a *ngIf="role === 'faculty' || role === 'admin'" [routerLink]="['/view-submissions']" [queryParams]="{assignmentId: a._id}" class="btn btn-sm btn-outline">View Submissions</a>
-            </div>
+            <!-- Normal view -->
+            <ng-container *ngIf="editingAssignmentId !== a._id">
+              <div class="assignment-info">
+                <h3>{{ a.title }}</h3>
+                <p>{{ a.description }}</p>
+                <span class="due-date">Due: {{ a.dueDate | date:'mediumDate' }}</span>
+              </div>
+              <div class="assignment-actions">
+                <a *ngIf="role === 'student' && isEnrolled" [routerLink]="['/submit-assignment']" [queryParams]="{assignmentId: a._id}" class="btn btn-sm">Submit</a>
+                <span *ngIf="role === 'student' && !isEnrolled" class="text-muted">Enroll to submit</span>
+                <a *ngIf="role === 'faculty' || role === 'admin'" [routerLink]="['/view-submissions']" [queryParams]="{assignmentId: a._id}" class="btn btn-sm btn-outline">View Submissions</a>
+                <button *ngIf="role === 'admin'" class="btn btn-sm btn-edit" (click)="startEditAssignment(a)">Edit</button>
+                <button *ngIf="role === 'admin'" class="btn btn-sm btn-danger-sm" (click)="deleteAssignment(a._id)">Delete</button>
+              </div>
+            </ng-container>
+
+            <!-- Edit view (admin only) -->
+            <ng-container *ngIf="editingAssignmentId === a._id">
+              <div class="edit-assignment-form">
+                <div class="form-group">
+                  <label>Title</label>
+                  <input type="text" [(ngModel)]="editAssignment.title" [name]="'atitle_'+a._id" class="edit-input">
+                </div>
+                <div class="form-group">
+                  <label>Description</label>
+                  <textarea [(ngModel)]="editAssignment.description" [name]="'adesc_'+a._id" class="edit-input" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Due Date</label>
+                  <input type="date" [(ngModel)]="editAssignment.dueDate" [name]="'adue_'+a._id" class="edit-input" [min]="todayDate">
+                </div>
+                <div class="edit-btns">
+                  <button class="btn btn-sm btn-save" (click)="saveEditAssignment(a._id)">Save</button>
+                  <button class="btn btn-sm btn-cancel" (click)="cancelEditAssignment()">Cancel</button>
+                </div>
+              </div>
+            </ng-container>
           </div>
           <p *ngIf="assignments.length === 0" class="empty-msg">No assignments yet.</p>
         </div>
@@ -103,6 +132,7 @@ import { EnrollmentService } from '../../services/enrollment.service';
     .assignment-info h3 { margin: 0 0 4px; color: #1a1a2e; font-size: 1rem; }
     .assignment-info p { margin: 0 0 4px; color: #666; font-size: 0.9rem; }
     .due-date { font-size: 0.8rem; color: #e94560; }
+    .assignment-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
     .btn-sm {
       padding: 6px 14px; background: #1a1a2e; color: #fff; border: none;
       border-radius: 4px; font-size: 0.85rem; cursor: pointer; text-decoration: none; display: inline-block;
@@ -110,6 +140,14 @@ import { EnrollmentService } from '../../services/enrollment.service';
     .btn-sm:hover { background: #16213e; }
     .btn-outline { background: transparent; color: #1a1a2e; border: 1px solid #1a1a2e; }
     .btn-outline:hover { background: #1a1a2e; color: #fff; }
+    .btn-edit { background: #1565c0 !important; }
+    .btn-edit:hover { background: #0d47a1 !important; }
+    .btn-save { background: #2e7d32 !important; }
+    .btn-save:hover { background: #1b5e20 !important; }
+    .btn-cancel { background: #757575 !important; }
+    .btn-cancel:hover { background: #616161 !important; }
+    .btn-danger-sm { background: #e94560 !important; }
+    .btn-danger-sm:hover { background: #c62828 !important; }
     .text-muted { color: #999; font-size: 0.85rem; }
     .data-table { width: 100%; border-collapse: collapse; background: #fff; }
     .data-table th, .data-table td {
@@ -117,6 +155,14 @@ import { EnrollmentService } from '../../services/enrollment.service';
     }
     .data-table th { background: #f8f9fa; color: #333; font-weight: 600; }
     .empty-msg { color: #999; font-style: italic; }
+    .edit-assignment-form { width: 100%; }
+    .edit-assignment-form .form-group { margin-bottom: 8px; }
+    .edit-assignment-form label { display: block; font-size: 0.8rem; color: #555; margin-bottom: 2px; }
+    .edit-input {
+      width: 100%; padding: 6px 10px; border: 1px solid #1565c0; border-radius: 4px;
+      font-size: 0.85rem; box-sizing: border-box; font-family: inherit;
+    }
+    .edit-btns { display: flex; gap: 8px; margin-top: 8px; }
   `]
 })
 export class CourseDetailComponent implements OnInit {
@@ -129,17 +175,24 @@ export class CourseDetailComponent implements OnInit {
   errorMsg = '';
   private courseId = '';
 
+  // Admin edit assignment
+  editingAssignmentId: string | null = null;
+  editAssignment = { title: '', description: '', dueDate: '' };
+  todayDate = '';
+
   constructor(
     private route: ActivatedRoute,
     private courseService: CourseService,
     private assignmentService: AssignmentService,
     private authService: AuthService,
-    private enrollmentService: EnrollmentService
+    private enrollmentService: EnrollmentService,
+    private adminService: AdminService
   ) {}
 
   ngOnInit(): void {
     this.role = this.authService.getRole();
     this.courseId = this.route.snapshot.paramMap.get('id') || '';
+    this.todayDate = new Date().toISOString().split('T')[0];
     if (this.courseId) {
       this.courseService.getCourseById(this.courseId).subscribe({
         next: (course) => this.course = course
@@ -196,6 +249,59 @@ export class CourseDetailComponent implements OnInit {
         setTimeout(() => this.successMsg = '', 3000);
       },
       error: (err) => this.errorMsg = err.error?.message || 'Unenroll failed'
+    });
+  }
+
+  // Admin: Edit assignment
+  startEditAssignment(a: Assignment): void {
+    this.editingAssignmentId = a._id;
+    const dueDateStr = a.dueDate ? new Date(a.dueDate).toISOString().split('T')[0] : '';
+    this.editAssignment = { title: a.title, description: a.description, dueDate: dueDateStr };
+  }
+
+  cancelEditAssignment(): void {
+    this.editingAssignmentId = null;
+    this.editAssignment = { title: '', description: '', dueDate: '' };
+  }
+
+  saveEditAssignment(assignmentId: string): void {
+    if (!this.editAssignment.title || !this.editAssignment.description || !this.editAssignment.dueDate) {
+      this.errorMsg = 'All fields are required';
+      return;
+    }
+    const today = new Date().toISOString().split('T')[0];
+    if (this.editAssignment.dueDate < today) {
+      this.errorMsg = 'Due date cannot be in the past';
+      return;
+    }
+    this.successMsg = '';
+    this.errorMsg = '';
+    this.adminService.updateAssignment(assignmentId, this.editAssignment).subscribe({
+      next: () => {
+        this.successMsg = 'Assignment updated successfully';
+        this.editingAssignmentId = null;
+        this.assignmentService.getAssignmentsByCourse(this.courseId).subscribe({
+          next: (assignments) => this.assignments = assignments
+        });
+        setTimeout(() => this.successMsg = '', 3000);
+      },
+      error: (err) => this.errorMsg = err.error?.message || 'Failed to update assignment'
+    });
+  }
+
+  deleteAssignment(assignmentId: string): void {
+    if (!confirm('Delete this assignment and all its submissions?')) return;
+    this.successMsg = '';
+    this.errorMsg = '';
+    this.adminService.deleteAssignment(assignmentId).subscribe({
+      next: () => {
+        this.successMsg = 'Assignment deleted successfully';
+        this.assignmentService.getAssignmentsByCourse(this.courseId).subscribe({
+          next: (assignments) => this.assignments = assignments
+        });
+        setTimeout(() => this.successMsg = '', 3000);
+      },
+      error: (err) => this.errorMsg = err.error?.message || 'Failed to delete assignment'
     });
   }
 }

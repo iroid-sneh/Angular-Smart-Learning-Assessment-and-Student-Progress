@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { AdminService, DashboardStats } from '../../services/admin.service';
+import { ExportService } from '../../services/export.service';
 
 @Component({
   selector: 'app-admin-dashboard',
@@ -69,7 +70,13 @@ import { AdminService, DashboardStats } from '../../services/admin.service';
 
       <!-- All Courses Table -->
       <div class="section">
-        <h2>All Courses Overview</h2>
+        <div class="section-title-row">
+          <h2>All Courses Overview</h2>
+          <div class="export-btns" *ngIf="stats?.courseDetails?.length">
+            <button class="btn-export" (click)="exportCoursesCSV()">Export CSV</button>
+            <button class="btn-export" (click)="exportCoursesExcel()">Export Excel</button>
+          </div>
+        </div>
         <table class="data-table" *ngIf="stats?.courseDetails?.length">
           <thead>
             <tr>
@@ -103,7 +110,13 @@ import { AdminService, DashboardStats } from '../../services/admin.service';
 
       <!-- Recent Submissions -->
       <div class="section">
-        <h2>Recent Submissions</h2>
+        <div class="section-title-row">
+          <h2>Recent Submissions</h2>
+          <div class="export-btns" *ngIf="stats?.recentSubmissions?.length">
+            <button class="btn-export" (click)="exportSubmissionsCSV()">Export CSV</button>
+            <button class="btn-export" (click)="exportSubmissionsExcel()">Export Excel</button>
+          </div>
+        </div>
         <table class="data-table" *ngIf="stats?.recentSubmissions?.length">
           <thead>
             <tr>
@@ -134,7 +147,13 @@ import { AdminService, DashboardStats } from '../../services/admin.service';
 
       <!-- Recent Users -->
       <div class="section">
-        <h2>Recently Registered Users</h2>
+        <div class="section-title-row">
+          <h2>Recently Registered Users</h2>
+          <div class="export-btns" *ngIf="stats?.recentUsers?.length">
+            <button class="btn-export" (click)="exportUsersCSV()">Export CSV</button>
+            <button class="btn-export" (click)="exportUsersExcel()">Export Excel</button>
+          </div>
+        </div>
         <table class="data-table" *ngIf="stats?.recentUsers?.length">
           <thead>
             <tr><th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Joined</th></tr>
@@ -233,12 +252,19 @@ import { AdminService, DashboardStats } from '../../services/admin.service';
     }
     .quick-link:hover { background: #16213e; }
     .empty-msg { color: #999; font-style: italic; }
+    .section-title-row { display: flex; justify-content: space-between; align-items: center; }
+    .export-btns { display: flex; gap: 8px; }
+    .btn-export {
+      padding: 5px 12px; background: #00897b; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer; font-size: 0.8rem;
+    }
+    .btn-export:hover { background: #00695c; }
   `]
 })
 export class AdminDashboardComponent implements OnInit {
   stats: DashboardStats | null = null;
 
-  constructor(private adminService: AdminService) {}
+  constructor(private adminService: AdminService, private exportService: ExportService) {}
 
   ngOnInit(): void {
     this.adminService.getStats().subscribe({
@@ -254,5 +280,59 @@ export class AdminDashboardComponent implements OnInit {
   getAvgEnrollments(): number {
     if (!this.stats || this.stats.totalCourses === 0) return 0;
     return this.stats.totalEnrollments / this.stats.totalCourses;
+  }
+
+  exportCoursesCSV(): void {
+    const data = (this.stats?.courseDetails || []).map((c: any) => ({
+      title: c.title, faculty: c.facultyName, students: c.enrollmentCount,
+      assignments: c.assignmentCount, submissions: c.submissionCount,
+      graded: c.gradedCount, pending: c.submissionCount - c.gradedCount
+    }));
+    const headers = { title: 'Title', faculty: 'Faculty', students: 'Students', assignments: 'Assignments', submissions: 'Submissions', graded: 'Graded', pending: 'Pending' };
+    this.exportService.exportToCSV(data, 'courses_overview', headers);
+  }
+
+  exportCoursesExcel(): void {
+    const data = (this.stats?.courseDetails || []).map((c: any) => ({
+      title: c.title, faculty: c.facultyName, students: c.enrollmentCount,
+      assignments: c.assignmentCount, submissions: c.submissionCount,
+      graded: c.gradedCount, pending: c.submissionCount - c.gradedCount
+    }));
+    const headers = { title: 'Title', faculty: 'Faculty', students: 'Students', assignments: 'Assignments', submissions: 'Submissions', graded: 'Graded', pending: 'Pending' };
+    this.exportService.exportToExcel(data, 'courses_overview', headers);
+  }
+
+  exportSubmissionsCSV(): void {
+    const data = (this.stats?.recentSubmissions || []).map((s: any) => ({
+      student: s.studentId?.name || '-', assignment: s.assignmentId?.title || '-',
+      submitted: new Date(s.submittedAt).toLocaleString(),
+      marks: s.marks !== null ? s.marks + '/100' : 'Pending', feedback: s.feedback || '-'
+    }));
+    const headers = { student: 'Student', assignment: 'Assignment', submitted: 'Submitted', marks: 'Marks', feedback: 'Feedback' };
+    this.exportService.exportToCSV(data, 'recent_submissions', headers);
+  }
+
+  exportSubmissionsExcel(): void {
+    const data = (this.stats?.recentSubmissions || []).map((s: any) => ({
+      student: s.studentId?.name || '-', assignment: s.assignmentId?.title || '-',
+      submitted: new Date(s.submittedAt).toLocaleString(),
+      marks: s.marks !== null ? s.marks + '/100' : 'Pending', feedback: s.feedback || '-'
+    }));
+    const headers = { student: 'Student', assignment: 'Assignment', submitted: 'Submitted', marks: 'Marks', feedback: 'Feedback' };
+    this.exportService.exportToExcel(data, 'recent_submissions', headers);
+  }
+
+  exportUsersCSV(): void {
+    const data = (this.stats?.recentUsers || []).map((u: any) => ({
+      name: u.name, email: u.email, role: u.role, joined: new Date(u.createdAt).toLocaleString()
+    }));
+    this.exportService.exportToCSV(data, 'recent_users', { name: 'Name', email: 'Email', role: 'Role', joined: 'Joined' });
+  }
+
+  exportUsersExcel(): void {
+    const data = (this.stats?.recentUsers || []).map((u: any) => ({
+      name: u.name, email: u.email, role: u.role, joined: new Date(u.createdAt).toLocaleString()
+    }));
+    this.exportService.exportToExcel(data, 'recent_users', { name: 'Name', email: 'Email', role: 'Role', joined: 'Joined' });
   }
 }

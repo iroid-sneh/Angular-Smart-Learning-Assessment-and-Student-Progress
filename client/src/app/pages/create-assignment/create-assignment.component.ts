@@ -24,7 +24,7 @@ import { AssignmentService } from '../../services/assignment.service';
         </div>
         <div class="form-group">
           <label>Due Date</label>
-          <input type="date" [(ngModel)]="dueDate" name="dueDate" required>
+          <input type="date" [(ngModel)]="dueDate" name="dueDate" required [min]="todayDate">
         </div>
         <button type="submit" class="btn btn-primary" [disabled]="loading">
           {{ loading ? 'Creating...' : 'Create Assignment' }}
@@ -76,6 +76,7 @@ export class CreateAssignmentComponent implements OnInit {
   error = '';
   success = '';
   loading = false;
+  todayDate = '';
 
   constructor(
     private assignmentService: AssignmentService,
@@ -85,11 +86,16 @@ export class CreateAssignmentComponent implements OnInit {
 
   ngOnInit(): void {
     this.courseId = this.route.snapshot.queryParamMap.get('courseId') || '';
+    this.todayDate = new Date().toISOString().split('T')[0];
   }
 
   onSubmit(): void {
     if (!this.title || !this.description || !this.dueDate) {
       this.error = 'Please fill in all fields';
+      return;
+    }
+    if (this.dueDate < this.todayDate) {
+      this.error = 'Due date cannot be in the past. Only today or future dates are allowed.';
       return;
     }
     if (!this.courseId) {

@@ -48,4 +48,20 @@ export class AdminService {
   deleteCourse(id: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/courses/${id}`);
   }
+
+  updateUser(id: string, data: { name?: string; email?: string }): Observable<User> {
+    return this.http.put<User>(`${this.apiUrl}/users/${id}`, data);
+  }
+
+  updateCourse(id: string, data: { title?: string; description?: string; facultyId?: string }): Observable<Course> {
+    return this.http.put<Course>(`${this.apiUrl}/courses/${id}`, data);
+  }
+
+  updateAssignment(id: string, data: { title?: string; description?: string; dueDate?: string }): Observable<any> {
+    return this.http.put<any>(`${this.apiUrl}/assignments/${id}`, data);
+  }
+
+  deleteAssignment(id: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/assignments/${id}`);
+  }
 }
