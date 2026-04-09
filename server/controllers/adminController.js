@@ -15,7 +15,53 @@ const getAllUsers = async (req, res) => {
   }
 };
 
-// Delete a user
+// Get delete impact for a user
+const getUserDeleteImpact = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    if (user.role === 'admin') {
+      return res.status(400).json({ message: 'Cannot delete admin user' });
+    }
+
+    const impact = { user: { name: user.name, email: user.email, role: user.role } };
+
+    if (user.role === 'faculty') {
+      const courses = await Course.find({ facultyId: id }).select('title');
+      impact.courses = courses;
+      // Count total students and submissions across all faculty courses
+      let totalStudents = 0;
+      let totalAssignments = 0;
+      let totalSubmissions = 0;
+      for (const course of courses) {
+        totalStudents += await Enrollment.countDocuments({ courseId: course._id });
+        const assignments = await Assignment.find({ courseId: course._id });
+        totalAssignments += assignments.length;
+        const assignmentIds = assignments.map(a => a._id);
+        if (assignmentIds.length > 0) {
+          totalSubmissions += await Submission.countDocuments({ assignmentId: { $in: assignmentIds } });
+        }
+      }
+      impact.totalStudentsAffected = totalStudents;
+      impact.totalAssignments = totalAssignments;
+      impact.totalSubmissions = totalSubmissions;
+    }
+
+    if (user.role === 'student') {
+      impact.enrollments = await Enrollment.countDocuments({ studentId: id });
+      impact.submissions = await Submission.countDocuments({ studentId: id });
+    }
+
+    res.json(impact);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Delete a user (faculty requires courses to be reassigned first)
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -26,11 +72,52 @@ const deleteUser = async (req, res) => {
     if (user.role === 'admin') {
       return res.status(400).json({ message: 'Cannot delete admin user' });
     }
+
+    // If faculty, check if they still have courses
+    if (user.role === 'faculty') {
+      const courseCount = await Course.countDocuments({ facultyId: id });
+      if (courseCount > 0) {
+        return res.status(400).json({
+          message: `This faculty has ${courseCount} course(s). Please reassign all their courses to another faculty before deleting.`,
+          requiresReassignment: true,
+          courseCount
+        });
+      }
+    }
+
     await User.findByIdAndDelete(id);
     // Clean up related data
-    await Enrollment.deleteMany({ studentId: id });
-    await Submission.deleteMany({ studentId: id });
+    if (user.role === 'student') {
+      await Enrollment.deleteMany({ studentId: id });
+      await Submission.deleteMany({ studentId: id });
+    }
     res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Reassign all courses from one faculty to another
+const reassignFacultyCourses = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newFacultyId } = req.body;
+    if (!newFacultyId) {
+      return res.status(400).json({ message: 'New faculty ID is required' });
+    }
+    const oldFaculty = await User.findById(id);
+    if (!oldFaculty || oldFaculty.role !== 'faculty') {
+      return res.status(400).json({ message: 'Invalid faculty user' });
+    }
+    const newFaculty = await User.findById(newFacultyId);
+    if (!newFaculty || newFaculty.role !== 'faculty') {
+      return res.status(400).json({ message: 'Invalid target faculty' });
+    }
+    if (id === newFacultyId) {
+      return res.status(400).json({ message: 'Cannot reassign to the same faculty' });
+    }
+    const result = await Course.updateMany({ facultyId: id }, { facultyId: newFacultyId });
+    res.json({ message: `${result.modifiedCount} course(s) reassigned successfully` });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -67,6 +154,32 @@ const adminCreateCourse = async (req, res) => {
     }
     const course = await Course.create({ title, description, facultyId });
     res.status(201).json(course);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Get delete impact for a course
+const getCourseDeleteImpact = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const course = await Course.findById(id).populate('facultyId', 'name');
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+    const enrollmentCount = await Enrollment.countDocuments({ courseId: id });
+    const assignments = await Assignment.find({ courseId: id });
+    const assignmentIds = assignments.map(a => a._id);
+    let submissionCount = 0;
+    if (assignmentIds.length > 0) {
+      submissionCount = await Submission.countDocuments({ assignmentId: { $in: assignmentIds } });
+    }
+    res.json({
+      course: { title: course.title, faculty: course.facultyId?.name || 'N/A' },
+      enrolledStudents: enrollmentCount,
+      assignments: assignments.length,
+      submissions: submissionCount
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -250,10 +363,13 @@ module.exports = {
   deleteUser,
   updateUserRole,
   updateUser,
+  getUserDeleteImpact,
+  reassignFacultyCourses,
   adminCreateCourse,
   adminDeleteCourse,
   adminUpdateCourse,
   adminUpdateAssignment,
   adminDeleteAssignment,
+  getCourseDeleteImpact,
   getDashboardStats,
 };

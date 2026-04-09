@@ -37,6 +37,18 @@ export class AdminService {
     return this.http.delete(`${this.apiUrl}/users/${id}`);
   }
 
+  getUserDeleteImpact(id: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/users/${id}/impact`);
+  }
+
+  reassignFacultyCourses(facultyId: string, newFacultyId: string): Observable<any> {
+    return this.http.put<any>(`${this.apiUrl}/users/${facultyId}/reassign-courses`, { newFacultyId });
+  }
+
+  getCourseDeleteImpact(id: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/courses/${id}/impact`);
+  }
+
   updateUserRole(id: string, role: string): Observable<User> {
     return this.http.put<User>(`${this.apiUrl}/users/${id}/role`, { role });
   }

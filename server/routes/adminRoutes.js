@@ -6,11 +6,14 @@ const {
   deleteUser,
   updateUserRole,
   updateUser,
+  getUserDeleteImpact,
+  reassignFacultyCourses,
   adminCreateCourse,
   adminDeleteCourse,
   adminUpdateCourse,
   adminUpdateAssignment,
   adminDeleteAssignment,
+  getCourseDeleteImpact,
   getDashboardStats,
 } = require('../controllers/adminController');
 
@@ -22,11 +25,14 @@ router.get('/stats', getDashboardStats);
 
 // User management
 router.get('/users', getAllUsers);
+router.get('/users/:id/impact', getUserDeleteImpact);
+router.put('/users/:id/reassign-courses', reassignFacultyCourses);
 router.delete('/users/:id', deleteUser);
 router.put('/users/:id/role', updateUserRole);
 router.put('/users/:id', updateUser);
 
 // Course management
+router.get('/courses/:id/impact', getCourseDeleteImpact);
 router.post('/courses', adminCreateCourse);
 router.delete('/courses/:id', adminDeleteCourse);
 router.put('/courses/:id', adminUpdateCourse);

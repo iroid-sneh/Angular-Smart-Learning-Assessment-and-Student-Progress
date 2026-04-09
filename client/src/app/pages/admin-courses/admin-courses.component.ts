@@ -82,7 +82,7 @@ import { User } from '../../services/auth.service';
             <td class="action-btns">
               <ng-container *ngIf="editingCourseId !== course._id">
                 <button class="btn btn-edit" (click)="startEdit(course)">Edit</button>
-                <button class="btn btn-danger" (click)="deleteCourse(course._id)">Delete</button>
+                <button class="btn btn-danger" (click)="openDeleteModal(course)">Delete</button>
               </ng-container>
               <ng-container *ngIf="editingCourseId === course._id">
                 <button class="btn btn-save" (click)="saveEdit(course._id)">Save</button>
@@ -93,6 +93,55 @@ import { User } from '../../services/auth.service';
         </tbody>
       </table>
       <p *ngIf="courses.length === 0" class="empty-msg">No courses found.</p>
+
+      <!-- Delete Course Confirmation Modal -->
+      <div class="modal-overlay" *ngIf="showDeleteModal" (click)="closeDeleteModal()">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <div class="modal-header danger">
+            <h3>Delete Course</h3>
+            <button class="modal-close" (click)="closeDeleteModal()">&times;</button>
+          </div>
+          <div class="modal-body" *ngIf="deleteImpact">
+            <div class="warning-banner">
+              <strong>This action cannot be undone!</strong>
+            </div>
+
+            <p>You are about to permanently delete:</p>
+            <div class="impact-card">
+              <strong>{{ deleteImpact.course.title }}</strong>
+              <span class="text-muted"> - Faculty: {{ deleteImpact.course.faculty }}</span>
+            </div>
+
+            <div class="impact-details">
+              <h4>The following data will be permanently removed:</h4>
+              <ul>
+                <li><strong>{{ deleteImpact.enrolledStudents }}</strong> enrolled student(s) will be unenrolled</li>
+                <li><strong>{{ deleteImpact.assignments }}</strong> assignment(s) will be deleted</li>
+                <li><strong>{{ deleteImpact.submissions }}</strong> student submission(s) will be lost</li>
+              </ul>
+            </div>
+
+            <div class="impact-summary" *ngIf="deleteImpact.enrolledStudents > 0 || deleteImpact.submissions > 0">
+              <p>All enrolled students will lose access to this course and their submissions will be permanently deleted.</p>
+            </div>
+          </div>
+
+          <div class="modal-body" *ngIf="!deleteImpact">
+            <p>Loading impact analysis...</p>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-cancel" (click)="closeDeleteModal()">Cancel</button>
+            <button
+              *ngIf="deleteImpact"
+              class="btn btn-danger-confirm"
+              (click)="confirmDelete()"
+            >
+              Delete Permanently
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -106,10 +155,7 @@ import { User } from '../../services/auth.service';
     }
     .btn-export:hover { background: #00695c; }
     .form-section {
-      background: #f8f9fa;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 24px;
+      background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 24px;
     }
     .form-row { display: flex; gap: 16px; }
     .form-row .form-group { flex: 1; }
@@ -152,10 +198,10 @@ import { User } from '../../services/auth.service';
       font-size: 0.85rem; width: 100%; box-sizing: border-box; font-family: inherit;
     }
     .edit-select {
-      padding: 4px 8px; border: 1px solid #1565c0; border-radius: 4px;
-      font-size: 0.85rem;
+      padding: 4px 8px; border: 1px solid #1565c0; border-radius: 4px; font-size: 0.85rem;
     }
     .empty-msg { color: #999; font-style: italic; }
+    .text-muted { color: #999; }
     .success-msg {
       background: #e0f7e0; color: #2e7d32; padding: 10px;
       border-radius: 4px; margin-bottom: 16px; font-size: 0.9rem;
@@ -164,6 +210,53 @@ import { User } from '../../services/auth.service';
       background: #ffe0e0; color: #c62828; padding: 10px;
       border-radius: 4px; margin-bottom: 16px; font-size: 0.9rem;
     }
+
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); display: flex; justify-content: center;
+      align-items: center; z-index: 1000;
+    }
+    .modal {
+      background: #fff; border-radius: 12px; width: 520px; max-width: 90vw;
+      max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px; border-bottom: 1px solid #e0e0e0;
+    }
+    .modal-header.danger { background: #fce4ec; }
+    .modal-header h3 { margin: 0; color: #c62828; font-size: 1.1rem; }
+    .modal-close {
+      background: none; border: none; font-size: 1.4rem; cursor: pointer;
+      color: #999; padding: 0 4px;
+    }
+    .modal-close:hover { color: #333; }
+    .modal-body { padding: 20px; }
+    .modal-footer {
+      padding: 16px 20px; border-top: 1px solid #e0e0e0;
+      display: flex; justify-content: flex-end; gap: 10px;
+    }
+    .warning-banner {
+      background: #fff3e0; color: #e65100; padding: 12px 16px; border-radius: 6px;
+      margin-bottom: 16px; border-left: 4px solid #e65100; font-size: 0.9rem;
+    }
+    .impact-card {
+      background: #f8f9fa; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px;
+    }
+    .impact-details h4 { font-size: 0.9rem; color: #333; margin: 12px 0 8px; }
+    .impact-details ul { margin: 0; padding-left: 20px; font-size: 0.9rem; color: #555; }
+    .impact-details ul li { margin-bottom: 4px; }
+    .impact-summary {
+      background: #fce4ec; padding: 10px 14px; border-radius: 6px;
+      margin-top: 12px; font-size: 0.85rem; color: #c62828;
+    }
+    .impact-summary p { margin: 0; }
+    .btn-danger-confirm {
+      padding: 8px 20px; background: #c62828; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+    }
+    .btn-danger-confirm:hover { background: #b71c1c; }
   `]
 })
 export class AdminCoursesComponent implements OnInit {
@@ -174,6 +267,11 @@ export class AdminCoursesComponent implements OnInit {
   editCourse = { title: '', description: '', facultyId: '' };
   success = '';
   error = '';
+
+  // Delete modal
+  showDeleteModal = false;
+  deleteTargetCourse: Course | null = null;
+  deleteImpact: any = null;
 
   constructor(
     private adminService: AdminService,
@@ -248,6 +346,40 @@ export class AdminCoursesComponent implements OnInit {
     });
   }
 
+  // Delete modal logic
+  openDeleteModal(course: Course): void {
+    this.deleteTargetCourse = course;
+    this.deleteImpact = null;
+    this.showDeleteModal = true;
+
+    this.adminService.getCourseDeleteImpact(course._id).subscribe({
+      next: (impact) => this.deleteImpact = impact,
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to load impact data';
+        this.showDeleteModal = false;
+      }
+    });
+  }
+
+  closeDeleteModal(): void {
+    this.showDeleteModal = false;
+    this.deleteTargetCourse = null;
+    this.deleteImpact = null;
+  }
+
+  confirmDelete(): void {
+    if (!this.deleteTargetCourse) return;
+    this.adminService.deleteCourse(this.deleteTargetCourse._id).subscribe({
+      next: () => {
+        this.success = 'Course deleted successfully';
+        this.closeDeleteModal();
+        this.loadCourses();
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: (err) => this.error = err.error?.message || 'Failed to delete course'
+    });
+  }
+
   exportCSV(): void {
     const data = this.courses.map(c => ({
       title: c.title, description: c.description, faculty: c.facultyId?.name || '',
@@ -262,19 +394,5 @@ export class AdminCoursesComponent implements OnInit {
       created: new Date(c.createdAt).toLocaleDateString()
     }));
     this.exportService.exportToExcel(data, 'courses', { title: 'Title', description: 'Description', faculty: 'Faculty', created: 'Created' });
-  }
-
-  deleteCourse(courseId: string): void {
-    if (!confirm('Delete this course and all related data?')) return;
-    this.success = '';
-    this.error = '';
-    this.adminService.deleteCourse(courseId).subscribe({
-      next: () => {
-        this.success = 'Course deleted successfully';
-        this.loadCourses();
-        setTimeout(() => this.success = '', 3000);
-      },
-      error: (err) => this.error = err.error?.message || 'Failed to delete course'
-    });
   }
 }

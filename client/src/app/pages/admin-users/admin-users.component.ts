@@ -63,7 +63,7 @@ import { User } from '../../services/auth.service';
                 <button
                   *ngIf="user.role !== 'admin'"
                   class="btn btn-danger"
-                  (click)="deleteUser(user._id)"
+                  (click)="openDeleteModal(user)"
                 >Delete</button>
                 <span *ngIf="user.role === 'admin'" class="text-muted">-</span>
               </ng-container>
@@ -76,6 +76,86 @@ import { User } from '../../services/auth.service';
         </tbody>
       </table>
       <p *ngIf="users.length === 0" class="empty-msg">No users found.</p>
+
+      <!-- Delete Confirmation Modal -->
+      <div class="modal-overlay" *ngIf="showDeleteModal" (click)="closeDeleteModal()">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <div class="modal-header danger">
+            <h3>Delete User</h3>
+            <button class="modal-close" (click)="closeDeleteModal()">&times;</button>
+          </div>
+          <div class="modal-body" *ngIf="deleteImpact">
+            <div class="warning-banner">
+              <strong>This action cannot be undone!</strong>
+            </div>
+
+            <p>You are about to permanently delete:</p>
+            <div class="impact-card">
+              <div class="impact-user">
+                <strong>{{ deleteImpact.user.name }}</strong>
+                <span class="text-muted">({{ deleteImpact.user.email }})</span>
+                <span class="role-badge" [class]="deleteImpact.user.role">{{ deleteImpact.user.role }}</span>
+              </div>
+            </div>
+
+            <!-- Student impact -->
+            <div *ngIf="deleteImpact.user.role === 'student'" class="impact-details">
+              <h4>The following data will be permanently removed:</h4>
+              <ul>
+                <li><strong>{{ deleteImpact.enrollments }}</strong> course enrollment(s)</li>
+                <li><strong>{{ deleteImpact.submissions }}</strong> assignment submission(s)</li>
+              </ul>
+            </div>
+
+            <!-- Faculty impact -->
+            <div *ngIf="deleteImpact.user.role === 'faculty'" class="impact-details">
+              <div *ngIf="deleteImpact.courses?.length > 0">
+                <h4>This faculty owns {{ deleteImpact.courses.length }} course(s):</h4>
+                <ul class="course-list">
+                  <li *ngFor="let c of deleteImpact.courses">{{ c.title }}</li>
+                </ul>
+                <div class="impact-stats">
+                  <span><strong>{{ deleteImpact.totalStudentsAffected }}</strong> enrolled student(s)</span>
+                  <span><strong>{{ deleteImpact.totalAssignments }}</strong> assignment(s)</span>
+                  <span><strong>{{ deleteImpact.totalSubmissions }}</strong> submission(s)</span>
+                </div>
+
+                <div class="reassign-section">
+                  <h4>Reassign courses to another faculty before deleting:</h4>
+                  <select [(ngModel)]="reassignFacultyId" name="reassignFaculty" class="reassign-select">
+                    <option value="">-- Select Faculty --</option>
+                    <option *ngFor="let f of getOtherFaculty()" [value]="f._id">{{ f.name }} ({{ f.email }})</option>
+                  </select>
+                  <button
+                    class="btn btn-reassign"
+                    [disabled]="!reassignFacultyId"
+                    (click)="reassignAndDelete()"
+                  >Reassign & Delete</button>
+                </div>
+              </div>
+
+              <div *ngIf="deleteImpact.courses?.length === 0" class="impact-details">
+                <p>This faculty has no courses assigned. Safe to delete.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-body" *ngIf="!deleteImpact">
+            <p>Loading impact analysis...</p>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-cancel" (click)="closeDeleteModal()">Cancel</button>
+            <button
+              *ngIf="deleteImpact && (deleteImpact.user.role === 'student' || deleteImpact.courses?.length === 0)"
+              class="btn btn-danger-confirm"
+              (click)="confirmDelete()"
+            >
+              Delete Permanently
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -90,28 +170,17 @@ import { User } from '../../services/auth.service';
     .admin-users h1 { color: #1a1a2e; }
     .data-table { width: 100%; border-collapse: collapse; background: #fff; }
     .data-table th, .data-table td {
-      padding: 12px 16px;
-      text-align: left;
-      border-bottom: 1px solid #e0e0e0;
-      font-size: 0.9rem;
+      padding: 12px 16px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 0.9rem;
     }
     .data-table th { background: #f8f9fa; color: #333; font-weight: 600; }
     .role-badge {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 12px;
-      font-size: 0.8rem;
-      font-weight: 500;
+      display: inline-block; padding: 3px 10px; border-radius: 12px;
+      font-size: 0.8rem; font-weight: 500;
     }
     .role-badge.student { background: #e3f2fd; color: #1565c0; }
     .role-badge.faculty { background: #f3e5f5; color: #7b1fa2; }
     .role-badge.admin { background: #fce4ec; color: #c62828; }
-    .role-select {
-      padding: 4px 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 0.85rem;
-    }
+    .role-select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.85rem; }
     .action-btns { display: flex; gap: 6px; align-items: center; }
     .btn { padding: 4px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
     .btn-edit { background: #1565c0; color: #fff; }
@@ -136,6 +205,67 @@ import { User } from '../../services/auth.service';
       background: #ffe0e0; color: #c62828; padding: 10px;
       border-radius: 4px; margin-bottom: 16px; font-size: 0.9rem;
     }
+
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); display: flex; justify-content: center;
+      align-items: center; z-index: 1000;
+    }
+    .modal {
+      background: #fff; border-radius: 12px; width: 520px; max-width: 90vw;
+      max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px; border-bottom: 1px solid #e0e0e0;
+    }
+    .modal-header.danger { background: #fce4ec; }
+    .modal-header h3 { margin: 0; color: #c62828; font-size: 1.1rem; }
+    .modal-close {
+      background: none; border: none; font-size: 1.4rem; cursor: pointer;
+      color: #999; padding: 0 4px;
+    }
+    .modal-close:hover { color: #333; }
+    .modal-body { padding: 20px; }
+    .modal-footer {
+      padding: 16px 20px; border-top: 1px solid #e0e0e0;
+      display: flex; justify-content: flex-end; gap: 10px;
+    }
+    .warning-banner {
+      background: #fff3e0; color: #e65100; padding: 12px 16px; border-radius: 6px;
+      margin-bottom: 16px; border-left: 4px solid #e65100; font-size: 0.9rem;
+    }
+    .impact-card {
+      background: #f8f9fa; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px;
+    }
+    .impact-user { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .impact-details h4 { font-size: 0.9rem; color: #333; margin: 12px 0 8px; }
+    .impact-details ul { margin: 0; padding-left: 20px; font-size: 0.9rem; color: #555; }
+    .impact-details ul li { margin-bottom: 4px; }
+    .course-list li { color: #1a1a2e; font-weight: 500; }
+    .impact-stats {
+      display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem; color: #666;
+    }
+    .reassign-section {
+      margin-top: 16px; padding: 14px; background: #e3f2fd; border-radius: 6px;
+    }
+    .reassign-section h4 { margin: 0 0 10px; color: #1565c0; font-size: 0.88rem; }
+    .reassign-select {
+      width: 100%; padding: 8px 12px; border: 1px solid #90caf9; border-radius: 4px;
+      font-size: 0.9rem; margin-bottom: 10px;
+    }
+    .btn-reassign {
+      padding: 8px 16px; background: #1565c0; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer; font-size: 0.85rem; width: 100%;
+    }
+    .btn-reassign:hover { background: #0d47a1; }
+    .btn-reassign:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-danger-confirm {
+      padding: 8px 20px; background: #c62828; color: #fff; border: none;
+      border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+    }
+    .btn-danger-confirm:hover { background: #b71c1c; }
   `]
 })
 export class AdminUsersComponent implements OnInit {
@@ -144,6 +274,12 @@ export class AdminUsersComponent implements OnInit {
   error = '';
   editingUserId: string | null = null;
   editUser = { name: '', email: '' };
+
+  // Delete modal
+  showDeleteModal = false;
+  deleteTargetUser: User | null = null;
+  deleteImpact: any = null;
+  reassignFacultyId = '';
 
   constructor(private adminService: AdminService, private exportService: ExportService) {}
 
@@ -199,6 +335,68 @@ export class AdminUsersComponent implements OnInit {
     });
   }
 
+  // Delete modal logic
+  openDeleteModal(user: User): void {
+    this.deleteTargetUser = user;
+    this.deleteImpact = null;
+    this.reassignFacultyId = '';
+    this.showDeleteModal = true;
+
+    this.adminService.getUserDeleteImpact(user._id).subscribe({
+      next: (impact) => this.deleteImpact = impact,
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to load impact data';
+        this.showDeleteModal = false;
+      }
+    });
+  }
+
+  closeDeleteModal(): void {
+    this.showDeleteModal = false;
+    this.deleteTargetUser = null;
+    this.deleteImpact = null;
+    this.reassignFacultyId = '';
+  }
+
+  getOtherFaculty(): User[] {
+    return this.users.filter(u => u.role === 'faculty' && u._id !== this.deleteTargetUser?._id);
+  }
+
+  confirmDelete(): void {
+    if (!this.deleteTargetUser) return;
+    this.adminService.deleteUser(this.deleteTargetUser._id).subscribe({
+      next: () => {
+        this.success = 'User deleted successfully';
+        this.closeDeleteModal();
+        this.loadUsers();
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: (err) => this.error = err.error?.message || 'Failed to delete user'
+    });
+  }
+
+  reassignAndDelete(): void {
+    if (!this.deleteTargetUser || !this.reassignFacultyId) return;
+    const facultyId = this.deleteTargetUser._id;
+
+    // Step 1: Reassign courses
+    this.adminService.reassignFacultyCourses(facultyId, this.reassignFacultyId).subscribe({
+      next: () => {
+        // Step 2: Now delete the faculty
+        this.adminService.deleteUser(facultyId).subscribe({
+          next: () => {
+            this.success = 'Courses reassigned and faculty deleted successfully';
+            this.closeDeleteModal();
+            this.loadUsers();
+            setTimeout(() => this.success = '', 3000);
+          },
+          error: (err) => this.error = err.error?.message || 'Failed to delete user after reassignment'
+        });
+      },
+      error: (err) => this.error = err.error?.message || 'Failed to reassign courses'
+    });
+  }
+
   exportCSV(): void {
     const data = this.users.map(u => ({ name: u.name, email: u.email, role: u.role }));
     this.exportService.exportToCSV(data, 'users', { name: 'Name', email: 'Email', role: 'Role' });
@@ -207,19 +405,5 @@ export class AdminUsersComponent implements OnInit {
   exportExcel(): void {
     const data = this.users.map(u => ({ name: u.name, email: u.email, role: u.role }));
     this.exportService.exportToExcel(data, 'users', { name: 'Name', email: 'Email', role: 'Role' });
-  }
-
-  deleteUser(userId: string): void {
-    if (!confirm('Are you sure you want to delete this user?')) return;
-    this.success = '';
-    this.error = '';
-    this.adminService.deleteUser(userId).subscribe({
-      next: () => {
-        this.success = 'User deleted successfully';
-        this.loadUsers();
-        setTimeout(() => this.success = '', 3000);
-      },
-      error: (err) => this.error = err.error?.message || 'Failed to delete user'
-    });
   }
 }

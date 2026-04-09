@@ -50,7 +50,7 @@ import { AdminService } from '../../services/admin.service';
                 <span *ngIf="role === 'student' && !isEnrolled" class="text-muted">Enroll to submit</span>
                 <a *ngIf="role === 'faculty' || role === 'admin'" [routerLink]="['/view-submissions']" [queryParams]="{assignmentId: a._id}" class="btn btn-sm btn-outline">View Submissions</a>
                 <button *ngIf="role === 'admin'" class="btn btn-sm btn-edit" (click)="startEditAssignment(a)">Edit</button>
-                <button *ngIf="role === 'admin'" class="btn btn-sm btn-danger-sm" (click)="deleteAssignment(a._id)">Delete</button>
+                <button *ngIf="role === 'admin'" class="btn btn-sm btn-danger-sm" (click)="openDeleteAssignmentModal(a)">Delete</button>
               </div>
             </ng-container>
 
@@ -97,6 +97,30 @@ import { AdminService } from '../../services/admin.service';
           </tbody>
         </table>
         <p *ngIf="enrolledStudents.length === 0" class="empty-msg">No students enrolled yet.</p>
+      </div>
+
+      <!-- Delete Assignment Modal -->
+      <div class="modal-overlay" *ngIf="showDeleteModal" (click)="closeDeleteAssignmentModal()">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <div class="modal-header danger">
+            <h3>Delete Assignment</h3>
+            <button class="modal-close" (click)="closeDeleteAssignmentModal()">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="warning-banner">
+              <strong>This action cannot be undone!</strong>
+            </div>
+            <p>You are about to permanently delete the assignment:</p>
+            <div class="impact-card">
+              <strong>{{ deleteTargetAssignment?.title }}</strong>
+            </div>
+            <p class="impact-text">All student submissions for this assignment will be permanently deleted.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-modal btn-modal-cancel" (click)="closeDeleteAssignmentModal()">Cancel</button>
+            <button class="btn-modal btn-modal-danger" (click)="confirmDeleteAssignment()">Delete Permanently</button>
+          </div>
+        </div>
       </div>
     </div>
   `,
@@ -163,6 +187,46 @@ import { AdminService } from '../../services/admin.service';
       font-size: 0.85rem; box-sizing: border-box; font-family: inherit;
     }
     .edit-btns { display: flex; gap: 8px; margin-top: 8px; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); display: flex; justify-content: center;
+      align-items: center; z-index: 1000;
+    }
+    .modal {
+      background: #fff; border-radius: 12px; width: 460px; max-width: 90vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px; border-bottom: 1px solid #e0e0e0;
+    }
+    .modal-header.danger { background: #fce4ec; }
+    .modal-header h3 { margin: 0; color: #c62828; font-size: 1.1rem; }
+    .modal-close {
+      background: none; border: none; font-size: 1.4rem; cursor: pointer; color: #999;
+    }
+    .modal-body { padding: 20px; }
+    .modal-footer {
+      padding: 16px 20px; border-top: 1px solid #e0e0e0;
+      display: flex; justify-content: flex-end; gap: 10px;
+    }
+    .warning-banner {
+      background: #fff3e0; color: #e65100; padding: 12px 16px; border-radius: 6px;
+      margin-bottom: 16px; border-left: 4px solid #e65100; font-size: 0.9rem;
+    }
+    .impact-card {
+      background: #f8f9fa; padding: 12px 16px; border-radius: 6px; margin-bottom: 12px;
+    }
+    .impact-text { font-size: 0.9rem; color: #c62828; }
+    .btn-modal {
+      padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+    }
+    .btn-modal-cancel { background: #757575; color: #fff; }
+    .btn-modal-cancel:hover { background: #616161; }
+    .btn-modal-danger { background: #c62828; color: #fff; }
+    .btn-modal-danger:hover { background: #b71c1c; }
   `]
 })
 export class CourseDetailComponent implements OnInit {
@@ -179,6 +243,10 @@ export class CourseDetailComponent implements OnInit {
   editingAssignmentId: string | null = null;
   editAssignment = { title: '', description: '', dueDate: '' };
   todayDate = '';
+
+  // Delete assignment modal
+  showDeleteModal = false;
+  deleteTargetAssignment: Assignment | null = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -289,13 +357,24 @@ export class CourseDetailComponent implements OnInit {
     });
   }
 
-  deleteAssignment(assignmentId: string): void {
-    if (!confirm('Delete this assignment and all its submissions?')) return;
+  openDeleteAssignmentModal(a: Assignment): void {
+    this.deleteTargetAssignment = a;
+    this.showDeleteModal = true;
+  }
+
+  closeDeleteAssignmentModal(): void {
+    this.showDeleteModal = false;
+    this.deleteTargetAssignment = null;
+  }
+
+  confirmDeleteAssignment(): void {
+    if (!this.deleteTargetAssignment) return;
     this.successMsg = '';
     this.errorMsg = '';
-    this.adminService.deleteAssignment(assignmentId).subscribe({
+    this.adminService.deleteAssignment(this.deleteTargetAssignment._id).subscribe({
       next: () => {
         this.successMsg = 'Assignment deleted successfully';
+        this.closeDeleteAssignmentModal();
         this.assignmentService.getAssignmentsByCourse(this.courseId).subscribe({
           next: (assignments) => this.assignments = assignments
         });
